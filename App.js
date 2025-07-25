@@ -1,24 +1,76 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, Button, FlatList, StyleSheet } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  FlatList,
+  StyleSheet,
+  Alert,
+} from "react-native";
+import { db } from "./lib/firebase";
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+} from "firebase/firestore";
+
 
 export default function App() {
   const [meal, setMeal] = useState("");
   const [meals, setMeals] = useState([]);
 
-  const addMeal = () => {
-    if (meal.trim() === "") return;
-    const newMeal = {
-      id: Date.now().toString(),
-      name: meal,
-      timestamp: new Date().toLocaleString(),
-    };
-    setMeals([...meals, newMeal]);
-    setMeal("");
-  };
+const addMeal = async () => {
+  if (meal.trim() === "") {
+    Alert.alert("入力エラー", "食事内容を入力してください");
+    return;
+  }
 
-  const deleteMeal = (id) => {
-    setMeals(meals.filter((meal) => meal.id !== id));
-  };
+  try {
+    await addDoc(collection(db, "meals"), {
+      name: meal,
+      timestamp: serverTimestamp(),
+    });
+    setMeal("");
+  } catch (error) {
+    console.error("追加エラー:", error);
+    Alert.alert("追加エラー", "データの追加に失敗しました");
+  }
+};
+
+const deleteMeal = async (id) => {
+  try {
+    await deleteDoc(doc(db, "meals", id));
+  } catch (error) {
+    console.error("削除エラー:", error);
+    Alert.alert("削除エラー", "データの削除に失敗しました");
+  }
+};
+
+useEffect(() => {
+  const unsubscribe = onSnapshot(
+    collection(db, "meals"),
+    (snapshot) => {
+      const fetchedMeals = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name,
+        timestamp: doc.data().timestamp
+          ? new Date(doc.data().timestamp.seconds * 1000).toLocaleString()
+          : "未登録",
+      }));
+      setMeals(fetchedMeals);
+    },
+    (error) => {
+      console.error("読み込みエラー:", error);
+      Alert.alert("読み込みエラー", "データの取得に失敗しました");
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
 
   const renderHeader = () => (
     <View style={[styles.row, styles.headerRow]}>
